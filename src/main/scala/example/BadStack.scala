@@ -32,30 +32,49 @@ object BadStack extends IOApp {
     go.run(list.reverse)
   }
 
+  val popNextToken = Stack.pop.map(_.fold(identity, _ => sys.error("bad stack")))
+  val popNextInt = Stack.pop.map(_.fold(_ => sys.error("bad stack"), identity))
+
   def go: MyState[S, Int] =
     Stack.pop.flatMap({
-      case Left(value)  => ???
-      case Right(value) => 
-        Stack.isEmpty.flatMap(isEmpty => 
-          // We are done, because this was the last value
-          if (isEmpty) MyState.point(value)
-          else for {
-            next <- Stack.pop.map(_.fold(_ => sys.error("bad stack"), identity))
-            op <- Stack.pop.map(_.fold(identity, _ => sys.error("bad stack")))
-            _ <- Stack.push(Right(op match {
-              case Add => next + value
-              case Subtract => next - value
-            }))
-            value <- go
-          } yield value
+      case Left(value) => ???
+      case Right(value) =>
+        Stack.isEmpty.flatMap(
+          isEmpty =>
+            // We are done, because this was the last value
+            if (isEmpty) MyState.point(value)
+            else {
+              // Equivalent to below
+              // popNextInt.flatMap { next =>
+              //   popNextToken.flatMap { op => 
+              //       Stack.push(Right(op match {
+              //         case Add      => next + value
+              //         case Subtract => next - value
+              //       })).flatMap { _ =>
+              //         go
+              //       }
+              //   }
+              // }
+              for {
+                next <- popNextInt
+                op   <- popNextToken
+                _ <- Stack.push(Right(op match {
+                  case Add      => next + value
+                  case Subtract => next - value
+                }))
+                value <- go
+              } yield value
+            }
         )
     })
 
-  def run(args: List[String]): IO[ExitCode] = 
+  def run(args: List[String]): IO[ExitCode] =
     io.putStrLn(calculate(List[Elem](Token.Add.asLeft, 1.asRight, Token.Subtract.asLeft, 20.asRight, 5.asRight))) >>
       io.putStrLn(calculate(List[Elem](Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))) >>
       // This is a bad stack configuration
-      io.putStrLn(calculate(List[Elem](Token.Add.asLeft, Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))) >>
+      io.putStrLn(
+        calculate(List[Elem](Token.Add.asLeft, Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))
+      ) >>
       IO.pure(ExitCode.Error)
-    
+
 }

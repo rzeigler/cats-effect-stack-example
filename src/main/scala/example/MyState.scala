@@ -4,13 +4,14 @@ final case class MyState[S, A](runState: S => (S, A)) extends AnyVal {
     def map[B](f: A => B): MyState[S, B] = 
         MyState(s => {
             val (s2, a) = runState(s)
-            s2 -> f(a)
+            (s2, f(a))
         })
     
     def flatMap[B](f: A => MyState[S, B]): MyState[S, B] = 
         MyState(s => {
-            val (s2, a) = runState(s)
-            f(a).runState(s2)
+            val (s2, a) = this.runState(s)
+            val nextState: MyState[S, B] = f(a)
+            nextState.runState(s2)
         })
 
     def run(s: S): A = runState(s)._2
