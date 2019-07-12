@@ -18,11 +18,11 @@ object BetterStack extends IOApp {
 
     val pop: State[S, Option[Elem]] =
       State({
-        case head :: tail => tail -> head.some
-        case _ => List.empty -> none
+        case head :: tail => tail       -> head.some
+        case _            => List.empty -> none
       })
 
-    val peek: State[S, Option[Elem]] = 
+    val peek: State[S, Option[Elem]] =
       State.inspect(_.headOption)
 
     val isEmpty: State[S, Boolean] = State.inspect(_.isEmpty)
@@ -40,21 +40,22 @@ object BetterStack extends IOApp {
       case Right(value) =>
         OptionT
           .liftF(Stack.isEmpty)
-          .flatMap(
-            isEmpty =>
-              if (isEmpty) OptionT.pure(value)
-              else
-                for {
-                  next <- nextInt
-                  op   <- nextToken
-                  _ <- OptionT.liftF(Stack.push(Right(op match {
-                    case Token.Add      => next + value
-                    case Token.Subtract => next - value
-                  })))
-                  value <- go
-                } yield value
+          .ifM(
+            OptionT.pure(value),
+            calc(value) >> go
           )
     })
+
+  def calc(right: Int): OptionT[State[S, ?], Unit] = 
+    for {
+      left <- nextInt
+      op <- nextToken
+      push = op match {
+        case Token.Add      => left + right
+        case Token.Subtract => left - right
+      }
+      _ <- OptionT.liftF(Stack.push(Right(push)))
+    } yield ()
 
   def nextInt: OptionT[State[S, ?], Int] =
     OptionT(Stack.pop)
@@ -71,11 +72,17 @@ object BetterStack extends IOApp {
       })
 
   def run(args: List[String]): IO[ExitCode] =
-    io.putStrLn(calculate(NonEmptyList.of[Elem](Token.Add.asLeft, 1.asRight, Token.Subtract.asLeft, 20.asRight, 5.asRight))) >>
-      io.putStrLn(calculate(NonEmptyList.of[Elem](Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))) >>
+    io.putStrLn(
+      calculate(NonEmptyList.of[Elem](Token.Add.asLeft, 1.asRight, Token.Subtract.asLeft, 20.asRight, 5.asRight))
+    ) >>
+      io.putStrLn(
+        calculate(NonEmptyList.of[Elem](Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))
+      ) >>
       // This is a bad stack configuration
       io.putStrLn(
-        calculate(NonEmptyList.of[Elem](Token.Add.asLeft, Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight))
+        calculate(
+          NonEmptyList.of[Elem](Token.Add.asLeft, Token.Add.asLeft, 5.asRight, Token.Add.asLeft, 20.asRight, 5.asRight)
+        )
       ) >>
       IO.pure(ExitCode.Error)
 
